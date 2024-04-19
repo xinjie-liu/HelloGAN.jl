@@ -4,6 +4,20 @@ struct GAN
     discriminator::Any
 end
 
+function get_generator_loss(gan::GAN; rng, device)
+    function loss(x)
+        
+    end
+end
+
+function train_gan(; set_up = construct_training_setup())
+    gan = setup_gan(set_up)
+    for epoch in 1:set_up.training_config.n_epochs
+        println("Epoch $epoch")
+        
+    end
+end
+
 function construct_training_setup()
     function decoder_gt(z)
         tanh.(1.5z)
@@ -12,7 +26,7 @@ function construct_training_setup()
     rng = Random.MersenneTwister(1)
 
     training_config = (;
-        optimizer = Flux.ADAM(0.001),
+        optimizer = Optimisers.Adam(0.001, (0.9, 0.999), 1.0e-8),
         n_epochs = 200,
         batchsize = 128,
         n_datapoints = 100_000,
@@ -21,7 +35,7 @@ function construct_training_setup()
 
     dims = (; dim_x = 1, dim_hidden = 32, dim_z = 1) # dim_x: data dimension dim_z: 
     dataset = randn(rng, dims.dim_z, training_config.n_datapoints) |> decoder_gt |> training_config.device
-    data_batch_iterator = Flux.Data.DataLoader(dataset; training_config.batchsize)
+    data_batch_iterator = Flux.Data.DataLoader(dataset; training_config.batchsize, shuffle = true, rng)
 
     (; rng, training_config, dims, dataset, data_batch_iterator)
 end
