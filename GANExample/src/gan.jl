@@ -19,8 +19,12 @@ end
 
 function train_gan(; set_up = construct_training_setup(), training_log_sample_size = 1000)
     gan = setup_gan(set_up)
+    generator = gan.generator
+    discriminator = gan.discriminator
     fixed_ϵ = rand(set_up.rng, Distributions.Normal(), gan.z_dim, training_log_sample_size) # fixed noise samples for computing loss
     fixed_data = set_up.dataset[:, 1:training_log_sample_size]
+    generator_optimizer_setup = Optimisers.setup(set_up.training_config.optimizer, generator)
+    discriminator_optimizer_setup = Optimisers.setup(set_up.training_config.optimizer, discriminator)
     for epoch in 1:set_up.training_config.n_epochs
         println("Epoch $epoch")
         ii = 0
@@ -29,31 +33,29 @@ function train_gan(; set_up = construct_training_setup(), training_log_sample_si
             if ii % (set_up.training_config.time_difference_k + 1) != 0
                 # update discriminator
                 ϵ = rand(set_up.rng, Distributions.Normal(), gan.z_dim, num_samples) # noise samples
-                fake_data = gan.generator(ϵ)
+                fake_data = generator(ϵ)
                 # explicit style of gradient computation
-                flat_model, reconstruct_ = destructure(gan.discriminator)
-                grads = Zygote.gradient(flat_model) do flat_
-                    reconstructed_model = reconstruct_(flat_)
-                    loss = get_discriminator_loss(reconstructed_model)
+                grads = Zygote.gradient(discriminator) do model
+                    loss = get_discriminator_loss(model)
                     loss(mini_batch, fake_data)
                 end
-                grads[1]
+                ∇m = grads[1]
+                discriminator_optimizer_setup, discriminator = Optimisers.update(discriminator_optimizer_setup, discriminator, ∇m)
             else
                 # update generator
                 ϵ = rand(set_up.rng, Distributions.Normal(), gan.z_dim, num_samples) # noise samples
                 # explicit style of gradient computation
-                flat_model, reconstruct_ = destructure(gan.generator)
-                grads = Zygote.gradient(flat_model) do flat_
-                    reconstructed_model = reconstruct_(flat_)
-                    loss = get_generator_loss(reconstructed_model, gan.discriminator)
+                grads = Zygote.gradient(generator) do model
+                    loss = get_generator_loss(model, discriminator)
                     loss(ϵ)
                 end
-                grads[1]
+                ∇m = grads[1]
+                generator_optimizer_setup, generator = Optimisers.update(generator_optimizer_setup, generator, ∇m)
             end
             ii += 1
         end
-        current_loss = (sum(log.(gan.discriminator(fixed_data) .+ 1e-6)) 
-        + sum(log.(1 .- gan.discriminator(gan.generator(fixed_ϵ)) .+ 1e-6))) / training_log_sample_size
+        current_loss = (sum(log.(discriminator(fixed_data) .+ 1e-6)) 
+        + sum(log.(1 .- discriminator(generator(fixed_ϵ)) .+ 1e-6))) / training_log_sample_size
         @info "loss: $(current_loss)"
     end
 end
