@@ -54,8 +54,8 @@ end
 function get_generator_loss(generator, discriminator)
     function loss(ϵ)
         generated_fake_data = generator(ϵ)
-        sum(log.(1 .- discriminator(generated_fake_data) .+ 1e-6)) / size(ϵ)[2] # According to Goodfellow et al., use log(G(ϵ)) instead for improved gradient signal
-        # - sum(log.(discriminator(generated_fake_data) .+ 1e-6)) / size(ϵ)[2]
+        # sum(log.(1 .- discriminator(generated_fake_data) .+ 1e-6)) / size(ϵ)[2] # According to Goodfellow et al., use log(G(ϵ)) instead for improved gradient signal
+        - sum(log.(discriminator(generated_fake_data) .+ 1e-6)) / size(ϵ)[2]
     end
 end
 
@@ -65,7 +65,6 @@ function get_discriminator_loss(discriminator)
     end
 end
 
-
 function construct_training_setup()
     function decoder_gt(z)
         tanh.(1.5z)
@@ -74,16 +73,19 @@ function construct_training_setup()
     rng = Random.MersenneTwister(1)
 
     training_config = (;
-        optimizer = Optimisers.Adam(0.001, (0.9, 0.999), 1.0e-8),
-        n_epochs = 200,
+        optimizer = Optimisers.Adam(0.0001, (0.9, 0.999), 1.0e-8),
+        n_epochs = 500,
         batchsize = 128,
         n_datapoints = 100_000,
         device = gpu,
-        time_difference_k = 1, # difference of the update frequency between the generator and the discriminator
+        time_difference_k = 3, # difference of the update frequency between the generator and the discriminator
     )
 
     dims = (; dim_x = 1, dim_hidden = 32, dim_z = 1) # dim_x: data dimension dim_z: 
-    dataset = randn(rng, dims.dim_z, training_config.n_datapoints) |> decoder_gt |> training_config.device
+    # construct dataset
+    # dataset = randn(rng, dims.dim_z, training_config.n_datapoints) |> decoder_gt |> training_config.device
+    sample_distribution = MixtureModel(Normal, [(-3, 1), (3, 1)])
+    dataset = rand(rng, sample_distribution, dims.dim_z, training_config.n_datapoints) |> training_config.device
     data_batch_iterator = Flux.Data.DataLoader(dataset; training_config.batchsize, shuffle = true, rng)
 
     (; rng, training_config, dims, dataset, data_batch_iterator)
