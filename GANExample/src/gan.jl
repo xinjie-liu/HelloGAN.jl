@@ -4,20 +4,6 @@ struct GAN
     discriminator::Any
 end
 
-function get_generator_loss(generator, discriminator)
-    function loss(ϵ)
-        generated_fake_data = generator(ϵ)
-        sum(log.(1 .- discriminator(generated_fake_data) .+ 1e-6)) / size(ϵ)[2] # According to Goodfellow et al., use log(G(ϵ)) instead for improved gradient signal
-        # - sum(log.(discriminator(generated_fake_data) .+ 1e-6)) / size(ϵ)[2]
-    end
-end
-
-function get_discriminator_loss(discriminator)
-    function loss(real_data, fake_data)
-        - (sum(log.(discriminator(real_data) .+ 1e-6)) + sum(log.(1 .- discriminator(fake_data) .+ 1e-6))) / size(real_data)[2]
-    end
-end
-
 function train_gan(; set_up = construct_training_setup(), training_log_sample_size = 1000)
     gan = setup_gan(set_up)
     generator = gan.generator
@@ -65,28 +51,20 @@ function train_gan(; set_up = construct_training_setup(), training_log_sample_si
     plot_generated_samples(generator; set_up, gan.z_dim)
 end
 
-function plot_loss_curve(losses)
-    fig = Makie.Figure()
-    ax = Makie.Axis(fig[1, 1], title = "Training Loss Curve", xlabel = "Epoch", ylabel = "Loss")
-    Makie.lines!(ax, Vector{Float64}(1:length(losses)), losses)
-    Makie.save("data/training_loss.png", fig)
+function get_generator_loss(generator, discriminator)
+    function loss(ϵ)
+        generated_fake_data = generator(ϵ)
+        sum(log.(1 .- discriminator(generated_fake_data) .+ 1e-6)) / size(ϵ)[2] # According to Goodfellow et al., use log(G(ϵ)) instead for improved gradient signal
+        # - sum(log.(discriminator(generated_fake_data) .+ 1e-6)) / size(ϵ)[2]
+    end
 end
 
-function plot_generated_samples(generator; set_up, z_dim)
-    ϵ = rand(set_up.rng, Distributions.Normal(), z_dim, 10000) 
-    generated_samples = generator(ϵ)
-    fig = Makie.Figure(resolution = (1600, 800), fontsize = 35)
-    colors = [colorant"rgba(105, 105, 105, 0.65)", colorant"rgba(254, 38, 37, 0.65)"]
-    ax = Makie.Axis(fig[1, 1], title="ground truth vs. learned distribution", 
-        xlabel = "data value", ylabel = "probability density", 
-        spinewidth=3, xlabelsize = 40, ylabelsize = 40)
-    Makie.density!(ax, set_up.dataset |> vec, color = colors[1], strokearound = true, strokewidth = 3, 
-        strokecolor = colorant"rgba(105, 105, 105, 1.0)", label = "ground truth")
-    Makie.density!(ax, generated_samples |> vec, color = colors[2], strokearound = true, strokewidth = 3, 
-        strokecolor = colorant"rgba(254, 38, 37, 1.0)", label = "GAN generated")
-    Makie.axislegend(ax)
-    Makie.save("data/generated_samples.png", fig)
+function get_discriminator_loss(discriminator)
+    function loss(real_data, fake_data)
+        - (sum(log.(discriminator(real_data) .+ 1e-6)) + sum(log.(1 .- discriminator(fake_data) .+ 1e-6))) / size(real_data)[2]
+    end
 end
+
 
 function construct_training_setup()
     function decoder_gt(z)

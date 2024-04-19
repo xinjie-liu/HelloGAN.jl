@@ -11,5 +11,10 @@ using GLMakie
 using CUDA
 
 include("gan.jl")
+include("utils.jl")
+
+function main()
+    train_gan()
+end
 
 end # module GANExample
