@@ -7,13 +7,14 @@ end
 function get_generator_loss(generator, discriminator)
     function loss(ϵ)
         generated_fake_data = generator(ϵ)
-        sum(log.(1 .- discriminator(generated_fake_data) .+ 1e-6)) / size(ϵ)[2] # according to Goodfellow et al., use log(G(ϵ)) instead for improved gradient signal
+        sum(log.(1 .- discriminator(generated_fake_data) .+ 1e-6)) / size(ϵ)[2] # According to Goodfellow et al., use log(G(ϵ)) instead for improved gradient signal
+        # - sum(log.(discriminator(generated_fake_data) .+ 1e-6)) / size(ϵ)[2]
     end
 end
 
 function get_discriminator_loss(discriminator)
     function loss(real_data, fake_data)
-        -(sum(log.(discriminator(real_data) .+ 1e-6)) + sum(log.(1 .- discriminator(fake_data) .+ 1e-6))) / size(real_data)[2]
+        - (sum(log.(discriminator(real_data) .+ 1e-6)) + sum(log.(1 .- discriminator(fake_data) .+ 1e-6))) / size(real_data)[2]
     end
 end
 
@@ -25,6 +26,7 @@ function train_gan(; set_up = construct_training_setup(), training_log_sample_si
     fixed_data = set_up.dataset[:, 1:training_log_sample_size]
     generator_optimizer_setup = Optimisers.setup(set_up.training_config.optimizer, generator)
     discriminator_optimizer_setup = Optimisers.setup(set_up.training_config.optimizer, discriminator)
+    losses = Vector{Float64}()
     for epoch in 1:set_up.training_config.n_epochs
         println("Epoch $epoch")
         ii = 0
@@ -57,8 +59,17 @@ function train_gan(; set_up = construct_training_setup(), training_log_sample_si
         current_loss = (sum(log.(discriminator(fixed_data) .+ 1e-6)) 
         + sum(log.(1 .- discriminator(generator(fixed_ϵ)) .+ 1e-6))) / training_log_sample_size
         @info "loss: $(current_loss)"
+        push!(losses, current_loss)
     end
+    plot_loss_curve(losses)
     plot_generated_samples(generator; set_up, gan.z_dim)
+end
+
+function plot_loss_curve(losses)
+    fig = Makie.Figure()
+    ax = Makie.Axis(fig[1, 1], title = "Training Loss Curve", xlabel = "Epoch", ylabel = "Loss")
+    Makie.lines!(ax, Vector{Float64}(1:length(losses)), losses)
+    Makie.save("data/training_loss.png", fig)
 end
 
 function plot_generated_samples(generator; set_up, z_dim)
@@ -90,7 +101,7 @@ function construct_training_setup()
         batchsize = 128,
         n_datapoints = 100_000,
         device = gpu,
-        time_difference_k = 3, # difference of the update frequency between the generator and the discriminator
+        time_difference_k = 1, # difference of the update frequency between the generator and the discriminator
     )
 
     dims = (; dim_x = 1, dim_hidden = 32, dim_z = 1) # dim_x: data dimension dim_z: 
